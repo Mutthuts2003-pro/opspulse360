@@ -8,26 +8,31 @@ on:
 
 jobs:
   test-pipeline:
-    name: Build warehouse + run tests
+    name: Build pipeline + run all tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install pipeline dependencies
-        run: pip install pandas numpy scikit-learn pytest
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
       - name: Generate seed data
-        run: python data_generator/generate_seed_data.py --out ../data --scale 0.2
+        run: python generate_seed_data.py --out ../data --scale 0.2
         working-directory: data_generator
 
       - name: Build warehouse (Bronze -> Silver -> Gold)
         run: python build_warehouse.py
         working-directory: warehouse
+
+      - name: Simulate live stream (event generator -> stream processor)
+        run: |
+          python event_generator.py --ticks 200 --interval 0
+          python stream_processor.py --once --batch-size 2000
+        working-directory: streaming
 
       - name: Compute KPIs
         run: python kpi_engine.py
@@ -45,7 +50,7 @@ jobs:
         run: python rules_engine.py
         working-directory: automation
 
-      - name: Run test suite
+      - name: Run test suite (pipeline, ML, automation, backend API)
         run: pytest tests/ -v
 
   dbt-build-test:
@@ -58,37 +63,21 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dbt
-        run: pip install dbt-core dbt-duckdb
-      - name: Generate seed data (for dbt sources)
-        run: |
-          pip install pandas
-          python data_generator/generate_seed_data.py --out ../data --scale 0.2
+        run: pip install dbt-core dbt-duckdb pandas
+      - name: Generate seed data (dbt reads the CSVs)
+        run: python generate_seed_data.py --out ../data --scale 0.2
         working-directory: data_generator
       - name: dbt run
-        run: dbt run --profiles-dir ./ci_profiles
+        run: dbt run --profiles-dir .
         working-directory: dbt_project
       - name: dbt test
-        run: dbt test --profiles-dir ./ci_profiles
+        run: dbt test --profiles-dir .
         working-directory: dbt_project
-
-  backend-lint-test:
-    name: Backend API tests
-    runs-on: ubuntu-latest
-    needs: test-pipeline
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install backend dependencies
-        run: pip install -r backend/requirements.txt pytest httpx
-      - name: Run backend API tests
-        run: pytest tests/test_backend.py -v
 
   docker-build:
     name: Build Docker images
     runs-on: ubuntu-latest
-    needs: [test-pipeline, backend-lint-test]
+    needs: test-pipeline
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
@@ -96,18 +85,14 @@ jobs:
       - name: Build pipeline image
         run: docker build -f docker/Dockerfile.pipeline -t opspulse360-pipeline:${{ github.sha }} .
 
-  # Placeholder deploy job: wire this to your actual cloud target
-  # (Cloud Run, ECS, AKS, etc). Requires secrets to be configured in
-  # the repo's Settings > Secrets before it will do anything real.
+  # Placeholder deploy job: wire this to your real cloud target
+  # (Cloud Run, ECS, Azure Container Apps) and add secrets in repo Settings.
   deploy:
-    name: Deploy to cloud (manual trigger)
+    name: Deploy to cloud (placeholder)
     runs-on: ubuntu-latest
-    needs: docker-build
+    needs: [dbt-build-test, docker-build]
     if: github.ref == 'refs/heads/main'
-    environment: production
     steps:
       - uses: actions/checkout@v4
       - name: Deploy placeholder
-        run: |
-          echo "Wire this step to your cloud provider's deploy action."
-          echo "e.g. google-github-actions/deploy-cloudrun, or aws-actions/amazon-ecs-deploy-task-definition"
+        run: echo "Wire this step to your cloud provider's deploy action."

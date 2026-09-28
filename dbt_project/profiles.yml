@@ -1,0 +1,10 @@
+# Project-local dbt profile: run dbt from inside the dbt_project folder
+#   dbt run  --profiles-dir .
+#   dbt test --profiles-dir .
+opspulse360:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: '../data/opspulse_dbt.duckdb'
+      threads: 4

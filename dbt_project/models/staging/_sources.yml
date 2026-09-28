@@ -7,7 +7,7 @@ sources:
       In production these would be BigQuery/Snowflake external tables
       over GCS/S3; here dbt-duckdb reads the CSVs directly.
     meta:
-      external_location: "/home/claude/opspulse360/data/{name}.csv"
+      external_location: "../data/{name}.csv"
     tables:
       - name: orders
         description: Raw order transactions.
