@@ -1,0 +1,3 @@
+# dbt lives in its OWN venv (venv-dbt) because it pins dependencies that can clash with the main env
+dbt-core
+dbt-duckdb

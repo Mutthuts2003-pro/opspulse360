@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpsPulse 360</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #161d2e; --panel2: #1c2540; --border: #2a3350;
+    --text: #e8ecf7; --muted: #8b93ab; --accent: #5b8cff; --accent2: #34d399;
+    --warn: #f5b942; --danger: #ef5b5b; --critical: #ff3860;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  #login-screen { display:flex; align-items:center; justify-content:center; height:100vh; }
+  .login-box { background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:36px; width:340px; }
+  .login-box h1 { font-size:22px; margin:0 0 4px; }
+  .login-box p { color: var(--muted); margin:0 0 24px; font-size:13px; }
+  .login-box input { width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background: var(--panel2); color: var(--text); font-size:14px; }
+  .login-box button { width:100%; padding:11px; border-radius:8px; border:none; background: var(--accent); color:white; font-weight:600; cursor:pointer; font-size:14px; }
+  .login-box button:hover { opacity:0.9; }
+  .demo-hint { margin-top:16px; font-size:12px; color: var(--muted); line-height:1.6; }
+  .error { color: var(--danger); font-size:13px; margin-top:8px; min-height:16px; }
+
+  #app { display:none; height:100vh; }
+  .layout { display:flex; height:100%; }
+  .sidebar { width:220px; background: var(--panel); border-right:1px solid var(--border); padding:20px 0; overflow-y:auto; flex-shrink:0; }
+  .brand { padding:0 20px 20px; font-weight:700; font-size:18px; border-bottom:1px solid var(--border); margin-bottom:12px; }
+  .brand span { color: var(--accent); }
+  .role-badge { display:inline-block; margin-top:6px; font-size:10px; padding:2px 8px; border-radius:10px; background: var(--panel2); color: var(--accent2); }
+  .nav-item { padding:10px 20px; cursor:pointer; color: var(--muted); font-size:13.5px; border-left:3px solid transparent; }
+  .nav-item:hover { color: var(--text); background: var(--panel2); }
+  .nav-item.active { color: var(--text); border-left-color: var(--accent); background: var(--panel2); font-weight:600; }
+  .nav-section { padding:14px 20px 4px; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#5b6482; }
+  .logout { position:absolute; bottom:16px; left:20px; font-size:12px; color: var(--muted); cursor:pointer; }
+
+  .main { flex:1; overflow-y:auto; padding:28px 32px; }
+  .page-title { font-size:20px; font-weight:700; margin:0 0 4px; }
+  .page-sub { color: var(--muted); font-size:13px; margin:0 0 24px; }
+
+  .grid { display:grid; gap:16px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 900px) { .grid-4, .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+  .card { background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px; }
+  .kpi-label { color: var(--muted); font-size:12px; margin-bottom:6px; }
+  .kpi-value { font-size:24px; font-weight:700; }
+  .kpi-sub { font-size:11px; color: var(--muted); margin-top:4px; }
+
+  .panel-title { font-size:14px; font-weight:600; margin:0 0 14px; }
+  table { width:100%; border-collapse: collapse; font-size:12.5px; }
+  th { text-align:left; color: var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); }
+  td { padding:8px 10px; border-bottom:1px solid #1f2740; }
+  tr:hover td { background: var(--panel2); }
+
+  .badge { display:inline-block; padding:3px 9px; border-radius:20px; font-size:10.5px; font-weight:700; text-transform:uppercase; }
+  .badge-high, .badge-HIGH { background: rgba(245,185,66,0.15); color: var(--warn); }
+  .badge-critical, .badge-CRITICAL { background: rgba(255,56,96,0.15); color: var(--critical); }
+  .badge-medium, .badge-MEDIUM { background: rgba(91,140,255,0.15); color: var(--accent); }
+  .badge-low, .badge-LOW { background: rgba(139,147,171,0.15); color: var(--muted); }
+  .badge-open, .badge-OPEN { background: rgba(239,91,91,0.15); color: var(--danger); }
+  .badge-resolved, .badge-RESOLVED { background: rgba(52,211,153,0.15); color: var(--accent2); }
+  .badge-acknowledged, .badge-ACKNOWLEDGED { background: rgba(245,185,66,0.15); color: var(--warn); }
+
+  .btn-sm { font-size:11px; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background: var(--panel2); color: var(--text); cursor:pointer; margin-right:4px; }
+  .btn-sm:hover { border-color: var(--accent); }
+
+  .live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background: var(--accent2); margin-right:6px; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .settings-row { display:flex; gap:8px; align-items:center; margin-bottom:16px; font-size:12px; color: var(--muted); }
+  .settings-row input { background: var(--panel2); border:1px solid var(--border); color: var(--text); padding:5px 8px; border-radius:6px; font-size:12px; width:220px; }
+
+  .loading { color: var(--muted); font-size:13px; padding:20px; text-align:center; }
+  canvas { max-height: 260px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>OpsPulse <span>360</span></h1>
+    <p>Enterprise Analytics Platform</p>
+    <input id="login-user" placeholder="Username" autocomplete="username">
+    <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password">
+    <button onclick="doLogin()">Sign in</button>
+    <div class="error" id="login-error"></div>
+    <div class="demo-hint">
+      Demo accounts:<br>
+      <b>executive</b> / exec123 — Executive role<br>
+      <b>ops</b> / ops123 — Operations role
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="layout">
+    <div class="sidebar" style="position:relative;">
+      <div class="brand">OpsPulse <span>360</span><br><span class="role-badge" id="role-badge"></span></div>
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active" data-page="executive">Executive Dashboard</div>
+      <div class="nav-item" data-page="operations">Operations Dashboard</div>
+      <div class="nav-item" data-page="realtime"><span class="live-dot"></span>Real-Time Monitoring</div>
+      <div class="nav-section">Analytics</div>
+      <div class="nav-item" data-page="sales">Sales Analytics</div>
+      <div class="nav-item" data-page="customers">Customer Analytics</div>
+      <div class="nav-item" data-page="inventory">Inventory Analytics</div>
+      <div class="nav-item" data-page="delivery">Delivery Analytics</div>
+      <div class="nav-section">Intelligence</div>
+      <div class="nav-item" data-page="forecast">Forecasting &amp; Anomalies</div>
+      <div class="nav-item" data-page="alerts">Alert Center</div>
+      <div class="nav-section">System</div>
+      <div class="nav-item" data-page="dataquality">Data Quality / Pipeline</div>
+      <div class="logout" onclick="doLogout()">&larr; Sign out</div>
+    </div>
+    <div class="main" id="main-content">
+      <div class="loading">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let API_BASE = localStorage.getItem('opspulse_api_base') || 'http://127.0.0.1:8000';
+let TOKEN = null;
+let ROLE = null;
+
+async function api(path, opts={}) {
+  const res = await fetch(API_BASE + path, {
+    ...opts,
+    headers: { ...(opts.headers||{}), ...(TOKEN ? {'Authorization': 'Bearer ' + TOKEN} : {}), 'Content-Type':'application/json' }
+  });
+  if (!res.ok) throw new Error('API error ' + res.status + ' on ' + path);
+  return res.json();
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  try {
+    const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({username, password}) });
+    TOKEN = data.access_token; ROLE = data.role;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('role-badge').textContent = ROLE;
+    applyRoleVisibility();
+    navigate('executive');
+  } catch (e) {
+    errEl.textContent = 'Login failed. Check the API is running at ' + API_BASE + ' — ' + e.message;
+  }
+}
+function doLogout() {
+  TOKEN = null; ROLE = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+function applyRoleVisibility() {
+  document.querySelectorAll('.nav-item').forEach(el => el.style.display = 'block');
+  if (ROLE === 'operations') {
+    // operations role still sees everything for this demo except hides nothing;
+    // role-gating is enforced server-side on write actions (PATCH /api/alerts).
+  }
+}
+
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => navigate(el.dataset.page));
+});
+
+function setActiveNav(page) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
+}
+
+async function navigate(page) {
+  setActiveNav(page);
+  const main = document.getElementById('main-content');
+  main.innerHTML = '<div class="loading">Loading ' + page + '...</div>';
+  try {
+    const renderers = {
+      executive: renderExecutive, operations: renderOperations, realtime: renderRealtime,
+      sales: renderSales, customers: renderCustomers, inventory: renderInventory,
+      delivery: renderDelivery, forecast: renderForecast, alerts: renderAlerts,
+      dataquality: renderDataQuality,
+    };
+    await renderers[page](main);
+  } catch (e) {
+    main.innerHTML = `<div class="card"><b>Could not load this page.</b><br><br>
+      ${e.message}<br><br>
+      <div class="settings-row">API base URL: <input id="api-base-input" value="${API_BASE}"></div>
+      <button class="btn-sm" onclick="saveApiBase()">Save &amp; retry</button></div>`;
+  }
+}
+function saveApiBase() {
+  API_BASE = document.getElementById('api-base-input').value.trim();
+  localStorage.setItem('opspulse_api_base', API_BASE);
+  navigate(document.querySelector('.nav-item.active').dataset.page);
+}
+
+function fmt(n, decimals=0) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString(undefined, {minimumFractionDigits:decimals, maximumFractionDigits:decimals});
+}
+function fmtMoney(n) { return n === null || n === undefined ? '—' : '₹' + fmt(n); }
+function fmtPct(n) { return n === null || n === undefined ? '—' : fmt(n,1) + '%'; }
+
+// ---------------- EXECUTIVE DASHBOARD ----------------
+async function renderExecutive(main) {
+  const s = await api('/api/dashboard/summary');
+  main.innerHTML = `
+    <h1 class="page-title">Executive Dashboard</h1>
+    <p class="page-sub">Company-wide performance at a glance</p>
+    <div class="grid grid-4">
+      <div class="card"><div class="kpi-label">Total Revenue</div><div class="kpi-value">${fmtMoney(s.total_revenue)}</div></div>
+      <div class="card"><div class="kpi-label">Total Orders</div><div class="kpi-value">${fmt(s.total_orders)}</div></div>
+      <div class="card"><div class="kpi-label">Avg Order Value</div><div class="kpi-value">${fmtMoney(s.average_order_value)}</div></div>
+      <div class="card"><div class="kpi-label">On-Time Delivery</div><div class="kpi-value">${fmtPct(s.on_time_delivery_pct)}</div></div>
+      <div class="card"><div class="kpi-label">Stockout Risk Items</div><div class="kpi-value">${fmt(s.stockout_risk_item_count)}</div></div>
+      <div class="card"><div class="kpi-label">Estimated ROAS</div><div class="kpi-value">${fmt(s.estimated_roas,2)}x</div></div>
+      <div class="card"><div class="kpi-label">Total Customers</div><div class="kpi-value">${fmt(s.total_customers)}</div></div>
+      <div class="card"><div class="kpi-label">Repeat Customer Rate</div><div class="kpi-value">${fmtPct(s.repeat_customer_rate_pct)}</div></div>
+    </div>
+    <div class="grid grid-2" style="margin-top:16px;">
+      <div class="card"><div class="panel-title">Daily Revenue (last 60 days)</div><canvas id="rev-chart"></canvas></div>
+      <div class="card"><div class="panel-title">Revenue by Category</div><canvas id="cat-chart"></canvas></div>
+    </div>`;
+  const daily = await api('/api/sales/revenue/daily?limit=60');
+  new Chart(document.getElementById('rev-chart'), { type:'line', data:{ labels: daily.map(d=>d.day),
+    datasets:[{label:'Revenue', data: daily.map(d=>d.revenue), borderColor:'#5b8cff', backgroundColor:'rgba(91,140,255,0.1)', fill:true, tension:0.3}]},
+    options:{plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8, color:'#8b93ab'}}, y:{ticks:{color:'#8b93ab'}}}} });
+  const cats = await api('/api/sales/revenue/by-category');
+  new Chart(document.getElementById('cat-chart'), { type:'bar', data:{ labels: cats.map(c=>c.category),
+    datasets:[{label:'Revenue', data: cats.map(c=>c.revenue), backgroundColor:'#34d399'}]},
+    options:{plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#8b93ab'}}, y:{ticks:{color:'#8b93ab'}}}} });
+}
+
+// ---------------- OPERATIONS DASHBOARD ----------------
+async function renderOperations(main) {
+  const [atRisk, partners, alerts] = await Promise.all([
+    api('/api/inventory/at-risk'), api('/api/delivery/performance-by-partner'), api('/api/alerts/?status=OPEN')
+  ]);
+  main.innerHTML = `
+    <h1 class="page-title">Operations Dashboard</h1>
+    <p class="page-sub">Inventory risk, delivery performance, and open issues</p>
+    <div class="grid grid-4">
+      <div class="card"><div class="kpi-label">SKUs Below Reorder</div><div class="kpi-value">${fmt(atRisk.length)}</div></div>
+      <div class="card"><div class="kpi-label">Delivery Partners</div><div class="kpi-value">${fmt(partners.length)}</div></div>
+      <div class="card"><div class="kpi-label">Open Alerts</div><div class="kpi-value">${fmt(alerts.length)}</div></div>
+      <div class="card"><div class="kpi-label">Worst Partner SLA Breach</div><div class="kpi-value">${fmtPct(Math.max(...partners.map(p=>p.sla_breach_pct||0)))}</div></div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="panel-title">Delivery Partner Performance</div>
+      <table><thead><tr><th>Partner</th><th>Deliveries</th><th>Avg Hours</th><th>SLA Breach %</th></tr></thead><tbody>
+        ${partners.map(p=>`<tr><td>${p.partner}</td><td>${fmt(p.deliveries)}</td><td>${fmt(p.avg_delivery_hours,1)}</td><td>${fmtPct(p.sla_breach_pct)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="panel-title">Inventory At Risk (below reorder level)</div>
+      <table><thead><tr><th>Warehouse</th><th>Product</th><th>Stock Position</th><th>Reorder Level</th></tr></thead><tbody>
+        ${atRisk.slice(0,20).map(r=>`<tr><td>${r.warehouse_key}</td><td>${r.product_key}</td><td>${fmt(r.stock_position)}</td><td>${fmt(r.reorder_level)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>`;
+}
+
+// ---------------- REAL-TIME MONITORING ----------------
+let realtimeTimer = null;
+async function renderRealtime(main) {
+  main.innerHTML = `
+    <h1 class="page-title"><span class="live-dot"></span>Real-Time Monitoring</h1>
+    <p class="page-sub">Live metrics from the streaming pipeline (Kafka-equivalent &rarr; stream processor). Auto-refreshes every 5s.</p>
+    <div class="grid grid-4" id="live-kpis"></div>
+    <div class="card" style="margin-top:16px;"><div class="panel-title">Recent Live Orders</div><div id="live-orders-table"></div></div>`;
+  const refresh = async () => {
+    const metrics = await api('/api/realtime/metrics');
+    const m = {}; metrics.forEach(x => m[x.metric_key] = x.metric_value);
+    document.getElementById('live-kpis').innerHTML = `
+      <div class="card"><div class="kpi-label">Live Revenue</div><div class="kpi-value">${fmtMoney(m.live_revenue_total)}</div></div>
+      <div class="card"><div class="kpi-label">Live Orders</div><div class="kpi-value">${fmt(m.live_orders_total)}</div></div>
+      <div class="card"><div class="kpi-label">Payment Failures</div><div class="kpi-value">${fmt(m.live_payment_failures_total)}</div></div>
+      <div class="card"><div class="kpi-label">SLA Breaches</div><div class="kpi-value">${fmt(m.live_sla_breaches_total)}</div></div>`;
+    const orders = await api('/api/realtime/orders/recent?limit=15');
+    document.getElementById('live-orders-table').innerHTML = `
+      <table><thead><tr><th>Order</th><th>Warehouse</th><th>Amount</th><th>Status</th><th>Time</th></tr></thead><tbody>
+        ${orders.map(o=>`<tr><td>${o.order_id}</td><td>${o.warehouse_id}</td><td>${fmtMoney(o.amount)}</td><td>${o.status}</td><td>${new Date(o.event_ts).toLocaleTimeString()}</td></tr>`).join('') || '<tr><td colspan=5>No live events yet — run streaming/event_generator.py</td></tr>'}
+      </tbody></table>`;
+  };
+  await refresh();
+  if (realtimeTimer) clearInterval(realtimeTimer);
+  realtimeTimer = setInterval(refresh, 5000);
+}
+
+// ---------------- SALES ANALYTICS ----------------
+async function renderSales(main) {
+  const [byWh, byCat, orders] = await Promise.all([
+    api('/api/sales/revenue/by-warehouse'), api('/api/sales/revenue/by-category'), api('/api/sales/orders?limit=20')
+  ]);
+  main.innerHTML = `
+    <h1 class="page-title">Sales Analytics</h1>
+    <p class="page-sub">Revenue, orders, AOV, units and margin</p>
+    <div class="grid grid-2">
+      <div class="card"><div class="panel-title">Revenue by Warehouse</div><canvas id="wh-chart"></canvas></div>
+      <div class="card"><div class="panel-title">Orders by Category</div><canvas id="cat2-chart"></canvas></div>
+    </div>
+    <div class="card" style="margin-top:16px;"><div class="panel-title">Recent Orders</div>
+      <table><thead><tr><th>Order</th><th>Customer</th><th>Product</th><th>Qty</th><th>Amount</th><th>Status</th></tr></thead><tbody>
+        ${orders.map(o=>`<tr><td>${o.order_key}</td><td>${o.customer_key}</td><td>${o.product_key}</td><td>${o.quantity}</td><td>${fmtMoney(o.amount)}</td><td>${o.status}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  new Chart(document.getElementById('wh-chart'), {type:'bar', data:{labels:byWh.map(w=>w.warehouse), datasets:[{label:'Revenue', data:byWh.map(w=>w.revenue), backgroundColor:'#5b8cff'}]}, options:{plugins:{legend:{display:false}}}});
+  new Chart(document.getElementById('cat2-chart'), {type:'doughnut', data:{labels:byCat.map(c=>c.category), datasets:[{data:byCat.map(c=>c.orders), backgroundColor:['#5b8cff','#34d399','#f5b942','#ef5b5b','#a78bfa','#38bdf8','#fb923c']}]}});
+}
+
+// ---------------- CUSTOMER ANALYTICS ----------------
+async function renderCustomers(main) {
+  const [bySeg, byCity] = await Promise.all([api('/api/customers/by-segment'), api('/api/customers/by-city?limit=10')]);
+  main.innerHTML = `
+    <h1 class="page-title">Customer Analytics</h1>
+    <p class="page-sub">Segment performance and top cities by revenue</p>
+    <div class="grid grid-2">
+      <div class="card"><div class="panel-title">Revenue by Segment</div><canvas id="seg-chart"></canvas></div>
+      <div class="card"><div class="panel-title">Top Cities by Revenue</div><canvas id="city-chart"></canvas></div>
+    </div>`;
+  new Chart(document.getElementById('seg-chart'), {type:'bar', data:{labels:bySeg.map(s=>s.segment), datasets:[{label:'Revenue', data:bySeg.map(s=>s.revenue), backgroundColor:'#a78bfa'}]}, options:{plugins:{legend:{display:false}}}});
+  new Chart(document.getElementById('city-chart'), {type:'bar', data:{labels:byCity.map(c=>c.city), datasets:[{label:'Revenue', data:byCity.map(c=>c.revenue), backgroundColor:'#38bdf8'}]}, options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+}
+
+// ---------------- INVENTORY ANALYTICS ----------------
+async function renderInventory(main) {
+  const byWh = await api('/api/inventory/by-warehouse');
+  main.innerHTML = `
+    <h1 class="page-title">Inventory Analytics</h1>
+    <p class="page-sub">Stockout risk, reorder status by warehouse</p>
+    <div class="card"><div class="panel-title">Inventory Health by Warehouse</div>
+      <table><thead><tr><th>Warehouse</th><th>SKU Count</th><th>Below Reorder</th><th>Avg Stock Position</th></tr></thead><tbody>
+        ${byWh.map(w=>`<tr><td>${w.warehouse_key}</td><td>${fmt(w.sku_count)}</td><td>${fmt(w.skus_below_reorder)}</td><td>${fmt(w.avg_stock_position,1)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+}
+
+// ---------------- DELIVERY ANALYTICS ----------------
+async function renderDelivery(main) {
+  const trend = await api('/api/delivery/sla-trend');
+  main.innerHTML = `
+    <h1 class="page-title">Delivery Analytics</h1>
+    <p class="page-sub">SLA breach trend over time</p>
+    <div class="card"><div class="panel-title">SLA Breach % Over Time</div><canvas id="sla-chart"></canvas></div>`;
+  new Chart(document.getElementById('sla-chart'), {type:'line', data:{labels:trend.map(t=>t.day), datasets:[{label:'SLA Breach %', data:trend.map(t=>t.sla_breach_pct), borderColor:'#ef5b5b', backgroundColor:'rgba(239,91,91,0.1)', fill:true, tension:0.3}]}, options:{plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:10}}}}});
+}
+
+// ---------------- FORECASTING & ANOMALIES ----------------
+async function renderForecast(main) {
+  const [forecast, explanations, timeline] = await Promise.all([
+    api('/api/intelligence/forecast'), api('/api/intelligence/anomalies/explanations'), api('/api/intelligence/anomalies/timeline?limit=90')
+  ]);
+  main.innerHTML = `
+    <h1 class="page-title">Forecasting &amp; Anomaly Detection</h1>
+    <p class="page-sub">7-day revenue forecast and detected anomalies with driver explanations</p>
+    <div class="card"><div class="panel-title">7-Day Revenue Forecast</div><canvas id="fc-chart"></canvas></div>
+    <div class="card" style="margin-top:16px;"><div class="panel-title">Revenue: Actuals vs. Anomaly Flags (last 90 days)</div><canvas id="anom-chart"></canvas></div>
+    <div class="card" style="margin-top:16px;"><div class="panel-title">Anomaly Explanations &amp; Recommended Actions</div>
+      ${explanations.map(e=>`<div style="padding:12px 0; border-bottom:1px solid #1f2740;">
+        <b>${e.day}</b> — revenue ${fmtMoney(e.revenue)} vs. baseline ${fmtMoney(e.baseline_avg_revenue)}<br>
+        <span style="color:var(--muted); font-size:12.5px;">${e.explanation}</span><br>
+        <span style="color:var(--accent2); font-size:12.5px;">→ ${e.recommended_action}</span>
+      </div>`).join('') || '<span style="color:var(--muted);">No anomalies with sufficient history to explain yet.</span>'}
+    </div>`;
+  new Chart(document.getElementById('fc-chart'), {type:'line', data:{labels:forecast.map(f=>f.forecast_day),
+    datasets:[
+      {label:'Predicted', data:forecast.map(f=>f.predicted_revenue), borderColor:'#5b8cff', tension:0.3},
+      {label:'Upper 80%', data:forecast.map(f=>f.upper_bound_80pct), borderColor:'rgba(91,140,255,0.3)', borderDash:[4,4]},
+      {label:'Lower 80%', data:forecast.map(f=>f.lower_bound_80pct), borderColor:'rgba(91,140,255,0.3)', borderDash:[4,4]},
+    ]}, options:{scales:{x:{ticks:{color:'#8b93ab'}}}}});
+  const sorted = timeline.slice().reverse();
+  new Chart(document.getElementById('anom-chart'), {type:'scatter', data:{datasets:[
+    {label:'Revenue', data: sorted.map((d,i)=>({x:i, y:d.revenue})), showLine:true, borderColor:'#34d399', pointRadius:0},
+    {label:'Anomaly', data: sorted.filter(d=>d.is_anomaly).map((d)=>({x:sorted.indexOf(d), y:d.revenue})), backgroundColor:'#ff3860', pointRadius:5, showLine:false},
+  ]}, options:{scales:{x:{display:false}}}});
+}
+
+// ---------------- ALERT CENTER ----------------
+async function renderAlerts(main) {
+  const alerts = await api('/api/alerts/');
+  main.innerHTML = `
+    <h1 class="page-title">Alert Center</h1>
+    <p class="page-sub">Automated alerts from the business rules engine</p>
+    <div class="card">
+      <table><thead><tr><th>Severity</th><th>Rule</th><th>Message</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody id="alerts-body">
+        ${alerts.map(a=>alertRow(a)).join('') || '<tr><td colspan=6>No alerts yet — run automation/rules_engine.py</td></tr>'}
+      </tbody></table>
+    </div>`;
+}
+function alertRow(a) {
+  return `<tr id="row-${a.alert_id}">
+    <td><span class="badge badge-${a.severity}">${a.severity}</span></td>
+    <td>${a.rule}</td>
+    <td style="max-width:340px;">${a.message}</td>
+    <td><span class="badge badge-${a.status}">${a.status}</span></td>
+    <td>${new Date(a.created_at).toLocaleString()}</td>
+    <td>
+      <button class="btn-sm" onclick="updateAlert('${a.alert_id}','ACKNOWLEDGED')">Ack</button>
+      <button class="btn-sm" onclick="updateAlert('${a.alert_id}','RESOLVED')">Resolve</button>
+    </td></tr>`;
+}
+async function updateAlert(id, status) {
+  await api('/api/alerts/' + id, { method:'PATCH', body: JSON.stringify({status}) });
+  navigate('alerts');
+}
+
+// ---------------- DATA QUALITY / PIPELINE MONITORING ----------------
+async function renderDataQuality(main) {
+  const status = await api('/api/realtime/pipeline-status');
+  const dq = status.data_quality_checks || [];
+  main.innerHTML = `
+    <h1 class="page-title">Data Quality &amp; Pipeline Monitoring</h1>
+    <p class="page-sub">Silver-layer validation results from the last warehouse build</p>
+    <div class="card">
+      <table><thead><tr><th>Table</th><th>Rule</th><th>Failed Rows</th><th>Checked At</th></tr></thead><tbody>
+        ${dq.map(d=>`<tr><td>${d.table_name}</td><td>${d.rule}</td><td>${d.failed_rows === 0 ? '<span style="color:var(--accent2)">0 ✓</span>' : '<span style="color:var(--danger)">'+d.failed_rows+'</span>'}</td><td>${new Date(d.checked_at).toLocaleString()}</td></tr>`).join('') || '<tr><td colspan=4>No DQ report yet — run warehouse/silver/build_silver.py</td></tr>'}
+      </tbody></table>
+    </div>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: dim_customer
+    description: Customer dimension, one row per customer.
+    columns:
+      - name: customer_key
+        description: Primary key, unique customer identifier.
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_product
+    description: Product dimension with cost, price and derived margin %.
+    columns:
+      - name: product_key
+        description: Primary key, unique product identifier.
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_warehouse
+    description: Warehouse dimension.
+    columns:
+      - name: warehouse_key
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_date
+    description: Date dimension spanning the full range of order activity.
+    columns:
+      - name: date_key
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_orders
+    description: Grain is one row per order line. Core revenue/margin fact table.
+    columns:
+      - name: order_key
+        tests:
+          - unique
+          - not_null
+      - name: customer_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+      - name: product_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: product_key
+      - name: amount
+        tests:
+          - not_null
+
+  - name: fact_inventory
+    description: Grain is one row per warehouse/product inventory snapshot.
+    columns:
+      - name: warehouse_key
+        tests:
+          - not_null
+      - name: product_key
+        tests:
+          - not_null
+
+  - name: fact_delivery
+    description: Grain is one row per order's delivery record.
+    columns:
+      - name: order_key
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_marketing
+    description: Grain is one row per campaign per day.
+    columns:
+      - name: campaign_id
+        tests:
+          - not_null

@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../data:/app/data
+    environment:
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-opspulse360-dev-secret-change-in-production}
+    restart: unless-stopped
+
+  frontend:
+    image: python:3.12-slim
+    working_dir: /site
+    volumes:
+      - ../frontend:/site
+    command: python -m http.server 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+
+  pipeline:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.pipeline
+    volumes:
+      - ../data:/opt/opspulse360/data
+    profiles: ["batch"]   # run on demand: docker compose --profile batch run pipeline
+
+  # Real Apache Kafka + Zookeeper, provided for parity with the assignment's
+  # required architecture. The event_generator/stream_processor scripts in
+  # this repo use a lightweight simulated broker (streaming/kafka_sim.py) so
+  # the demo runs with zero extra services; swap in kafka-python pointed at
+  # this broker (KAFKA_BROKER=kafka:9092) to use the real thing instead.
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    profiles: ["kafka"]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    profiles: ["kafka"]
+
+  airflow:
+    image: apache/airflow:2.9.1-python3.12
+    depends_on:
+      - backend
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+      - ../:/opt/opspulse360
+    ports:
+      - "8081:8080"
+    command: >
+      bash -c "airflow db init &&
+               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true &&
+               airflow webserver & airflow scheduler"
+    profiles: ["airflow"]

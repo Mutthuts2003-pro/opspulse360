@@ -1,0 +1,113 @@
+name: OpsPulse 360 CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-pipeline:
+    name: Build warehouse + run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pipeline dependencies
+        run: pip install pandas numpy scikit-learn pytest
+
+      - name: Generate seed data
+        run: python data_generator/generate_seed_data.py --out ../data --scale 0.2
+        working-directory: data_generator
+
+      - name: Build warehouse (Bronze -> Silver -> Gold)
+        run: python build_warehouse.py
+        working-directory: warehouse
+
+      - name: Compute KPIs
+        run: python kpi_engine.py
+        working-directory: analytics
+
+      - name: Run anomaly detection
+        run: python anomaly_detection.py
+        working-directory: ml
+
+      - name: Run forecasting
+        run: python forecasting.py
+        working-directory: ml
+
+      - name: Evaluate business rules
+        run: python rules_engine.py
+        working-directory: automation
+
+      - name: Run test suite
+        run: pytest tests/ -v
+
+  dbt-build-test:
+    name: dbt build + test
+    runs-on: ubuntu-latest
+    needs: test-pipeline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dbt
+        run: pip install dbt-core dbt-duckdb
+      - name: Generate seed data (for dbt sources)
+        run: |
+          pip install pandas
+          python data_generator/generate_seed_data.py --out ../data --scale 0.2
+        working-directory: data_generator
+      - name: dbt run
+        run: dbt run --profiles-dir ./ci_profiles
+        working-directory: dbt_project
+      - name: dbt test
+        run: dbt test --profiles-dir ./ci_profiles
+        working-directory: dbt_project
+
+  backend-lint-test:
+    name: Backend API tests
+    runs-on: ubuntu-latest
+    needs: test-pipeline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt pytest httpx
+      - name: Run backend API tests
+        run: pytest tests/test_backend.py -v
+
+  docker-build:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    needs: [test-pipeline, backend-lint-test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -f docker/Dockerfile.backend -t opspulse360-backend:${{ github.sha }} .
+      - name: Build pipeline image
+        run: docker build -f docker/Dockerfile.pipeline -t opspulse360-pipeline:${{ github.sha }} .
+
+  # Placeholder deploy job: wire this to your actual cloud target
+  # (Cloud Run, ECS, AKS, etc). Requires secrets to be configured in
+  # the repo's Settings > Secrets before it will do anything real.
+  deploy:
+    name: Deploy to cloud (manual trigger)
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy placeholder
+        run: |
+          echo "Wire this step to your cloud provider's deploy action."
+          echo "e.g. google-github-actions/deploy-cloudrun, or aws-actions/amazon-ecs-deploy-task-definition"

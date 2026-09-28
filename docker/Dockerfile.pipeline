@@ -1,0 +1,14 @@
+# Runs the batch pipeline (bronze -> silver -> gold -> kpis -> ml -> rules)
+# Used as the image Airflow's BashOperator tasks execute inside, or can be
+# run standalone: docker run opspulse-pipeline
+FROM python:3.12-slim
+WORKDIR /opt/opspulse360
+COPY data_generator/ ./data_generator/
+COPY streaming/ ./streaming/
+COPY warehouse/ ./warehouse/
+COPY analytics/ ./analytics/
+COPY ml/ ./ml/
+COPY automation/ ./automation/
+COPY data/ ./data/
+RUN pip install --no-cache-dir pandas numpy scikit-learn
+CMD ["python", "warehouse/build_warehouse.py"]
